@@ -9,7 +9,7 @@ from streamlit_folium import st_folium
 # -------------------------
 # LOAD MODEL
 # -------------------------
-model = joblib.load("model.pkl")
+model = joblib.load("model (2).pkl")
 encoders = pickle.load(open("encoders.pkl", "rb"))
 
 st.set_page_config(page_title="Delivery AI", layout="wide")
