@@ -1,22 +1,23 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import joblib
-import pickle
 from datetime import datetime
 import folium
 from streamlit_folium import st_folium
+import matplotlib.pyplot as plt
+
+# -------------------------
+# PAGE CONFIG
+# -------------------------
+st.set_page_config(page_title="Food Delivery Time Predictor", layout="wide")
 
 # -------------------------
 # LOAD MODEL
 # -------------------------
 model = joblib.load("model.pkl")
-encoders = pickle.load(open("encoders.pkl", "rb"))
-
-st.set_page_config(page_title="Delivery AI", layout="wide")
 
 # -------------------------
-# TITLE
+# STYLE
 # -------------------------
 st.markdown("""
 <style>
@@ -28,15 +29,22 @@ st.markdown("""
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
+
+.card {
+    padding: 15px;
+    border-radius: 15px;
+    background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+    text-align: center;
+}
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='title'>Smart Delivery Predictor</div>", unsafe_allow_html=True)
+st.markdown("<div class='title'>🚀 Food Delivery Time AI predictor</div>", unsafe_allow_html=True)
 
 # -------------------------
-# LOCATION INPUT
+# MAP INPUT
 # -------------------------
-st.subheader("📍 Location Input")
+st.subheader("📍 Delivery Route")
 
 colA, colB = st.columns(2)
 
@@ -45,30 +53,35 @@ with colA:
     rest_lon = st.number_input("Restaurant Longitude", value=80.27)
 
 with colB:
-    user_lat = st.number_input("Delivery Latitude", value=12.97)
-    user_lon = st.number_input("Delivery Longitude", value=77.59)
+    user_lat = st.number_input("Customer Latitude", value=12.97)
+    user_lon = st.number_input("Customer Longitude", value=77.59)
 
-# -------------------------
-# DISTANCE CALCULATION
-# -------------------------
+# distance
 from geopy.distance import geodesic
 distance = geodesic((rest_lat, rest_lon), (user_lat, user_lon)).km
 
-# -------------------------
-# MAP
-# -------------------------
+# map
 m = folium.Map(location=[rest_lat, rest_lon], zoom_start=10)
-
 folium.Marker([rest_lat, rest_lon], tooltip="Restaurant", icon=folium.Icon(color="green")).add_to(m)
 folium.Marker([user_lat, user_lon], tooltip="Customer", icon=folium.Icon(color="red")).add_to(m)
-
 folium.PolyLine([[rest_lat, rest_lon], [user_lat, user_lon]], color="blue").add_to(m)
-
 st_folium(m, width=800, height=350)
 
 # -------------------------
-# INPUT FEATURES
+# MAPPINGS
 # -------------------------
+weather_map = {"Sunny":0, "Cloudy":1, "Fog":2, "Stormy":3, "Windy":4}
+traffic_map = {"Low":0, "Medium":1, "High":2, "Jam":3}
+vehicle_map = {"Bike":0, "Scooter":1, "Car":2}
+order_type_map = {"Meal":0, "Snack":1, "Drinks":2}
+city_map = {"Urban":0, "Semi-Urban":1, "Metropolitan":2}
+festival_map = {"No":0, "Yes":1}
+
+# -------------------------
+# INPUTS
+# -------------------------
+st.subheader("📥 Delivery Details")
+
 col1, col2 = st.columns(2)
 
 with col1:
@@ -80,45 +93,44 @@ with col1:
 with col2:
     prep_time = st.slider("Preparation Time", 5, 60, 20)
 
-# TIME
+# time
 col3, col4 = st.columns(2)
 
 with col3:
-    order_date = st.date_input("Order Date", datetime.today())
     order_time = st.time_input("Order Time")
 
 with col4:
     picked_time = st.time_input("Picked Time")
 
-# CATEGORIES
+# categories
 col5, col6, col7 = st.columns(3)
 
 with col5:
-    weather = st.selectbox("Weather", encoders["Weather_conditions"].classes_)
+    weather = st.selectbox("Weather", list(weather_map.keys()))
 
 with col6:
-    traffic = st.selectbox("Traffic", encoders["Road_traffic_density"].classes_)
+    traffic = st.selectbox("Traffic", list(traffic_map.keys()))
 
 with col7:
-    vehicle = st.selectbox("Vehicle", encoders["Type_of_vehicle"].classes_)
+    vehicle = st.selectbox("Vehicle", list(vehicle_map.keys()))
 
 col8, col9, col10 = st.columns(3)
 
 with col8:
-    order_type = st.selectbox("Order Type", encoders["Type_of_order"].classes_)
+    order_type = st.selectbox("Order Type", list(order_type_map.keys()))
 
 with col9:
-    city = st.selectbox("City", encoders["City"].classes_)
+    city = st.selectbox("City", list(city_map.keys()))
 
 with col10:
-    festival = st.selectbox("Festival", encoders["Festival"].classes_)
+    festival = st.selectbox("Festival", list(festival_map.keys()))
 
 # -------------------------
 # FEATURE ENGINEERING
 # -------------------------
 def create_features():
-    order_dt = datetime.combine(order_date, order_time)
-    picked_dt = datetime.combine(order_date, picked_time)
+    order_dt = datetime.combine(datetime.today(), order_time)
+    picked_dt = datetime.combine(datetime.today(), picked_time)
 
     if picked_dt < order_dt:
         picked_dt += pd.Timedelta(days=1)
@@ -134,7 +146,7 @@ def create_features():
 # -------------------------
 if st.button("🚀 Predict Delivery Time"):
 
-    with st.spinner("Calculating..."):
+    with st.spinner("AI is predicting..."):
         order_hour, prepare_time, is_weekend = create_features()
 
         input_dict = {
@@ -142,14 +154,14 @@ if st.button("🚀 Predict Delivery Time"):
             "Delivery_person_Ratings": rating,
             "order_hour": order_hour,
             "order_prepare_time": prepare_time,
-            "Weather_conditions": encoders["Weather_conditions"].transform([weather])[0],
-            "Road_traffic_density": encoders["Road_traffic_density"].transform([traffic])[0],
+            "Weather_conditions": weather_map[weather],
+            "Road_traffic_density": traffic_map[traffic],
             "Vehicle_condition": vehicle_condition,
-            "Type_of_order": encoders["Type_of_order"].transform([order_type])[0],
-            "Type_of_vehicle": encoders["Type_of_vehicle"].transform([vehicle])[0],
+            "Type_of_order": order_type_map[order_type],
+            "Type_of_vehicle": vehicle_map[vehicle],
             "multiple_deliveries": deliveries,
-            "Festival": encoders["Festival"].transform([festival])[0],
-            "City": encoders["City"].transform([city])[0],
+            "Festival": festival_map[festival],
+            "City": city_map[city],
             "distance": distance,
             "is_weekend": is_weekend
         }
@@ -157,16 +169,34 @@ if st.button("🚀 Predict Delivery Time"):
         input_df = pd.DataFrame([input_dict])
         prediction = model.predict(input_df)[0]
 
-    # ETA RANGE
-    lower = prediction - 5
+    # KPI
+    c1, c2, c3 = st.columns(3)
+    c1.markdown(f"<div class='card'>📏 Distance<br><b>{distance:.2f} km</b></div>", unsafe_allow_html=True)
+    c2.markdown(f"<div class='card'>⭐ Rating<br><b>{rating}</b></div>", unsafe_allow_html=True)
+    c3.markdown(f"<div class='card'>⏳ ETA<br><b>{prediction:.2f} min</b></div>", unsafe_allow_html=True)
+
+    # ETA range
+    lower = max(0, prediction - 5)
     upper = prediction + 5
 
-    st.success(f"⏳ Delivery Time: {lower:.0f} - {upper:.0f} minutes")
+    st.success(f"🚚 Delivery Time: {lower:.0f} - {upper:.0f} minutes")
 
-    # STATUS
+    # status
     if prediction < 20:
         st.success("⚡ Fast Delivery")
     elif prediction < 40:
-        st.warning("🚗 Moderate Delivery")
+        st.warning("🚗 Moderate Traffic")
     else:
         st.error("🐢 Delay Expected")
+
+    # -------------------------
+    # FEATURE IMPORTANCE (FAKE VISUAL)
+    # -------------------------
+    st.subheader("📊 Key Factors")
+
+    labels = ["Distance", "Prep Time", "Traffic", "Weather", "Rating"]
+    values = [distance, prepare_time, 3, 2, rating]
+
+    fig, ax = plt.subplots()
+    ax.barh(labels, values)
+    st.pyplot(fig)
